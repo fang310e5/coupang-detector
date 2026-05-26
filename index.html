@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>酷澎 Coupang 分潤網址終極辨別器</title>
+    <style>
+        :root {
+            --bg-color: #f5f7fa;
+            --card-bg: #ffffff;
+            --text-main: #333333;
+            --primary: #0074e9;
+            --success: #2ecc71;
+            --danger: #e74c3c;
+            --border: #e1e8ed;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            width: 100%;
+            max-width: 600px;
+        }
+        h2 { margin-top: 0; color: var(--primary); text-align: center; }
+        .description { color: #666; font-size: 14px; text-align: center; margin-bottom: 20px; }
+        textarea { width: 100%; height: 100px; padding: 12px; border: 2px solid var(--border); border-radius: 8px; resize: none; box-sizing: border-box; font-size: 14px; }
+        textarea:focus { outline: none; border-color: var(--primary); }
+        button { width: 100%; background-color: var(--primary); color: white; border: none; padding: 12px; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: bold; margin-top: 15px; }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #cccccc; cursor: not-allowed; }
+        .result-box { margin-top: 25px; padding: 20px; border-radius: 8px; display: none; border: 1px solid transparent; }
+        .result-box.active { display: block; }
+        .status-badge { font-size: 20px; font-weight: bold; text-align: center; margin-bottom: 15px; padding: 8px; border-radius: 6px; }
+        .has-commission { background-color: #e8f8f0; color: var(--success); border: 1px solid #c2eed5; }
+        .no-commission { background-color: #fdedec; color: var(--danger); border: 1px solid #fadbd8; }
+        .details-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+        .details-table th, .details-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+        .details-table th { width: 35%; color: #666; background-color: #fafafa; }
+        .url-display { max-width: 350px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; color: #888; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🛒 酷澎分潤網址終極辨別器</h2>
+    <div class="description">支援直接貼上<b>短網址</b> (tw.coupang.com/s/...)，系統會自動還原辨識！</div>
+    
+    <textarea id="urlInput" placeholder="請貼上酷澎短網址、長網址或包含文字的分享訊息..."></textarea>
+    <button id="btn" onclick="processUrl()">立即辨識</button>
+
+    <div id="resultBox" class="result-box">
+        <div id="statusBadge" class="status-badge"></div>
+        
+        <table class="details-table">
+            <tr>
+                <th>解析後網址</th>
+                <td><span id="resLongUrl" class="url-display">-</span></td>
+            </tr>
+            <tr>
+                <th>網址時間</th>
+                <td id="resTime">-</td>
+            </tr>
+            <tr>
+                <th>分潤標籤 (af_sub5)</th>
+                <td id="resSub5">-</td>
+            </tr>
+            <tr>
+                <th>結算狀態 (settlement)</th>
+                <td id="resSettlement">-</td>
+            </tr>
+            <tr>
+                <th>推廣管道 (pid)</th>
+                <td id="resPid">-</td>
+            </tr>
+        </table>
+    </div>
+</div>
+
+<script>
+async function processUrl() {
+    let rawText = document.getElementById('urlInput').value.trim();
+    const btn = document.getElementById('btn');
+    const resultBox = document.getElementById('resultBox');
+    
+    if (!rawText) return alert('請先輸入網址！');
+
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const matches = rawText.match(urlRegex);
+    if (!matches) return alert('找不到有效的網址！');
+    
+    let targetUrl = matches[0];
+    btn.disabled = true;
+    btn.innerText = '正在還原短網址並分析中...';
+
+    // 判斷如果是短網址，就呼叫我們的後端 API 解密
+    if (targetUrl.includes('tw.coupang.com/s/')) {
+        try {
+            const response = await fetch(`/api/unshorten?url=${encodeURIComponent(targetUrl)}`);
+            const data = await response.json();
+            if (data.longUrl) {
+                targetUrl = data.longUrl;
+            }
+        } catch (e) {
+            console.error('後端還原失敗，嘗試直接解析：', e);
+        }
+    }
+
+    analyzeLongUrl(targetUrl);
+    btn.disabled = false;
+    btn.innerText = '立即辨識';
+}
+
+function analyzeLongUrl(urlString) {
+    const resultBox = document.getElementById('resultBox');
+    const statusBadge = document.getElementById('statusBadge');
+    
+    document.getElementById('resLongUrl').innerText = urlString;
+    document.getElementById('resLongUrl').title = urlString;
+
+    try {
+        const urlObj = new URL(urlString);
+        const params = urlObj.searchParams;
+
+        const wTime = params.get('wTime') || '無';
+        const af_sub5 = params.get('af_sub5');
+        const settlement = params.get('settlement');
+        const pid = params.get('pid') || '無';
+
+        let formattedTime = wTime;
+        if (wTime && wTime.length === 14) {
+            formattedTime = `${wTime.substring(0,4)}/${wTime.substring(4,6)}/${wTime.substring(6,8)} ${wTime.substring(8,10)}:${wTime.substring(10,12)}:${wTime.substring(12,14)}`;
+        }
+
+        document.getElementById('resTime').innerText = formattedTime;
+        document.getElementById('resSub5').innerText = af_sub5 || '無';
+        document.getElementById('resSettlement').innerText = settlement || '未標註(預設計佣)';
+        document.getElementById('resPid').innerText = pid;
+
+        let isCommission = false;
+        let reason = "";
+
+        if (!af_sub5 && !params.has('af_c_id')) {
+            isCommission = false;
+            reason = "❌ 確認無分潤 (原始商品網址，無追蹤參數)";
+        } else if (settlement === 'N' || af_sub5 === 'NONPROFITSDP') {
+            isCommission = false;
+            reason = "❌ 確認無分潤 (非營利純分享模式)";
+        } else if (af_sub5 === 'SHARESDPNUL') {
+            isCommission = false;
+            reason = "❌ 確認無分潤 (無效的分享配置)";
+        } else if (af_sub5 === 'CSHARESDP' || af_sub5 === 'TWAFSDP') {
+            isCommission = true;
+            reason = "✅ 確認有分潤 (" + (af_sub5 === 'CSHARESDP' ? "App標準分潤" : "官方大聯盟分潤") + ")";
+        } else {
+            if (settlement !== 'N') {
+                isCommission = true;
+                reason = "✅ 確認有分潤 (具備追蹤參數)";
+            } else {
+                isCommission = false;
+                reason = "❌ 確認無分潤";
+            }
+        }
+
+        statusBadge.innerText = reason;
+        statusBadge.className = isCommission ? "status-badge has-commission" : "status-badge no-commission";
+        resultBox.classList.add('active');
+
+    } catch (e) {
+        alert('網址解析失敗！');
+    }
+}
+</script>
+</body>
+</html>

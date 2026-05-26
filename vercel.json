@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/api/unshorten", "destination": "/api/unshorten.js" }
+  ]
+}
